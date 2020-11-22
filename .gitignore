@@ -18,3 +18,11 @@ PythonAPI/pycocotools/mask.pyc
 PythonAPI/build/*
 *.egg
 *.so
+
+PythonAPI/pycocotools/__pycache__/*
+PythonAPI/pycocotools/__pycache__/mask.cpython-36.pyc
+PythonAPI/build/common/maskApi.o
+PythonAPI/pynlostools/__pycache__/__init__.cpython-36.pyc
+PythonAPI/pynlostools/_mask.pyx
+PythonAPI/pycocotools/__pycache__/mask.cpython-36.pyc
+PythonAPI/build/common/maskApi.o
