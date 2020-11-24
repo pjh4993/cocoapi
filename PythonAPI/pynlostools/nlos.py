@@ -9,7 +9,7 @@ __version__ = '2.0'
 # for the data, paper, and tutorials. The exact format of the annotations
 # is also described on the NLOS website. For example usage of the pynlostools
 # please see pynlostools_demo.ipynb. In addition to this API, please download both
-# the NLOS images and annotations in order to run the demo.
+# the NLOS image_groups and annotations in order to run the demo.
 
 # An alternative to using the API is to load the annotations directly
 # into Python dictionary
@@ -30,7 +30,7 @@ __version__ = '2.0'
 #  annToMask  - Convert segmentation in an annotation to binary mask.
 #  showAnns   - Display the specified annotations.
 #  loadRes    - Load algorithm results and create API for accessing them.
-#  download   - Download NLOS images from msnlos.org server.
+#  download   - Download NLOS image_groups from msnlos.org server.
 # Throughout the API "ann"=annotation, "cat"=category, and "img"=image.
 # Help on each functions can be accessed by: "help NLOS>function".
 
@@ -72,7 +72,7 @@ class NLOS:
         """
         Constructor of Microsoft NLOS helper class for reading and visualizing annotations.
         :param annotation_file (str): location of annotation file
-        :param image_folder (str): location to the folder that hosts images.
+        :param image_folder (str): location to the folder that hosts image_groups.
         :return:
         """
         # load dataset
@@ -271,7 +271,7 @@ class NLOS:
         :return: res (obj)         : result api object
         """
         res = NLOS()
-        res.dataset['images'] = [img for img in self.dataset['images']]
+        res.dataset['image_groups'] = [img for img in self.dataset['image_groups']]
 
         print('Loading and preparing results...')
         tic = time.time()
@@ -282,12 +282,13 @@ class NLOS:
         else:
             anns = resFile
         assert type(anns) == list, 'results in not an array of objects'
+        print(anns[0])
         annsImgIds = [ann['image_group_id'] for ann in anns]
         assert set(annsImgIds) == (set(annsImgIds) & set(self.getImgIds())), \
                'Results do not correspond to current nlos set'
         if 'caption' in anns[0]:
-            img_groupIds = set([img['id'] for img in res.dataset['images']]) & set([ann['image_group_id'] for ann in anns])
-            res.dataset['images'] = [img for img in res.dataset['images'] if img['id'] in img_groupIds]
+            img_groupIds = set([img['id'] for img in res.dataset['image_groups']]) & set([ann['image_group_id'] for ann in anns])
+            res.dataset['image_groups'] = [img for img in res.dataset['image_groups'] if img['id'] in img_groupIds]
             for id, ann in enumerate(anns):
                 ann['id'] = id+1
         elif 'bbox' in anns[0] and not anns[0]['bbox'] == []:
@@ -307,9 +308,9 @@ class NLOS:
 
     def download(self, tarDir = None, img_groupIds = [] ):
         '''
-        Download NLOS images from msnlos.org server.
+        Download NLOS image_groups from msnlos.org server.
         :param tarDir (str): NLOS results directory name
-               img_groupIds (list): images to be downloaded
+               img_groupIds (list): image_groups to be downloaded
         :return:
         '''
         if tarDir is None:
@@ -327,7 +328,7 @@ class NLOS:
             fname = os.path.join(tarDir, img['file_name'])
             if not os.path.exists(fname):
                 urlretrieve(img['nlos_url'], fname)
-            print('downloaded {}/{} images (t={:0.1f}s)'.format(i, N, time.time()- tic))
+            print('downloaded {}/{} image_groups (t={:0.1f}s)'.format(i, N, time.time()- tic))
 
     def loadNumpyAnnotations(self, data):
         """

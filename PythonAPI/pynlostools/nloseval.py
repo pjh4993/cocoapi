@@ -20,7 +20,7 @@ class NLOSeval:
     # For example usage see evalDemo.m and http://msnlos.org/.
     #
     # The evaluation parameters are as follows (defaults in brackets):
-    #  imgIds     - [all] N img ids to use for evaluation
+    #  img_groupIds     - [all] N img ids to use for evaluation
     #  catIds     - [all] K cat ids to use for evaluation
     #  iouThrs    - [.5:.05:.95] T=10 IoU thresholds for evaluation
     #  recThrs    - [0:.01:1] R=101 recall thresholds for evaluation
@@ -77,7 +77,7 @@ class NLOSeval:
         self.stats = []                     # result summarization
         self.ious = {}                      # ious between all gts and dts
         if not nlosGt is None:
-            self.params.imgIds = sorted(nlosGt.getImgIds())
+            self.params.img_groupIds = sorted(nlosGt.getImgIds())
             self.params.catIds = sorted(nlosGt.getCatIds())
 
 
@@ -93,11 +93,11 @@ class NLOSeval:
                 ann['segmentation'] = rle
         p = self.params
         if p.useCats:
-            gts=self.nlosGt.loadAnns(self.nlosGt.getAnnIds(imgIds=p.imgIds, catIds=p.catIds))
-            dts=self.nlosDt.loadAnns(self.nlosDt.getAnnIds(imgIds=p.imgIds, catIds=p.catIds))
+            gts=self.nlosGt.loadAnns(self.nlosGt.getAnnIds(img_groupIds=p.img_groupIds, catIds=p.catIds))
+            dts=self.nlosDt.loadAnns(self.nlosDt.getAnnIds(img_groupIds=p.img_groupIds, catIds=p.catIds))
         else:
-            gts=self.nlosGt.loadAnns(self.nlosGt.getAnnIds(imgIds=p.imgIds))
-            dts=self.nlosDt.loadAnns(self.nlosDt.getAnnIds(imgIds=p.imgIds))
+            gts=self.nlosGt.loadAnns(self.nlosGt.getAnnIds(img_groupIds=p.img_groupIds))
+            dts=self.nlosDt.loadAnns(self.nlosDt.getAnnIds(img_groupIds=p.img_groupIds))
 
         # convert ground truth to mask if iouType == 'segm'
         if p.iouType == 'segm':
@@ -112,9 +112,9 @@ class NLOSeval:
         self._gts = defaultdict(list)       # gt for evaluation
         self._dts = defaultdict(list)       # dt for evaluation
         for gt in gts:
-            self._gts[gt['image_id'], gt['category_id']].append(gt)
+            self._gts[gt['image_group_id'], gt['category_id']].append(gt)
         for dt in dts:
-            self._dts[dt['image_id'], dt['category_id']].append(dt)
+            self._dts[dt['image_group_id'], dt['category_id']].append(dt)
         self.evalImgs = defaultdict(list)   # per-image per-category evaluation results
         self.eval     = {}                  # accumulated evaluation results
 
@@ -131,7 +131,7 @@ class NLOSeval:
             p.iouType = 'segm' if p.useSegm == 1 else 'bbox'
             print('useSegm (deprecated) is not None. Running {} evaluation'.format(p.iouType))
         print('Evaluate annotation type *{}*'.format(p.iouType))
-        p.imgIds = list(np.unique(p.imgIds))
+        p.img_groupIds = list(np.unique(p.img_groupIds))
         if p.useCats:
             p.catIds = list(np.unique(p.catIds))
         p.maxDets = sorted(p.maxDets)
@@ -145,29 +145,29 @@ class NLOSeval:
             computeIoU = self.computeIoU
         elif p.iouType == 'keypoints':
             computeIoU = self.computeOks
-        self.ious = {(imgId, catId): computeIoU(imgId, catId) \
-                        for imgId in p.imgIds
+        self.ious = {(img_group_Id, catId): computeIoU(img_group_Id, catId) \
+                        for img_group_Id in p.img_groupIds
                         for catId in catIds}
 
         evaluateImg = self.evaluateImg
         maxDet = p.maxDets[-1]
-        self.evalImgs = [evaluateImg(imgId, catId, areaRng, maxDet)
+        self.evalImgs = [evaluateImg(img_group_Id, catId, areaRng, maxDet)
                  for catId in catIds
                  for areaRng in p.areaRng
-                 for imgId in p.imgIds
+                 for img_group_Id in p.img_groupIds
              ]
         self._paramsEval = copy.deepcopy(self.params)
         toc = time.time()
         print('DONE (t={:0.2f}s).'.format(toc-tic))
 
-    def computeIoU(self, imgId, catId):
+    def computeIoU(self, img_group_Id, catId):
         p = self.params
         if p.useCats:
-            gt = self._gts[imgId,catId]
-            dt = self._dts[imgId,catId]
+            gt = self._gts[img_group_Id,catId]
+            dt = self._dts[img_group_Id,catId]
         else:
-            gt = [_ for cId in p.catIds for _ in self._gts[imgId,cId]]
-            dt = [_ for cId in p.catIds for _ in self._dts[imgId,cId]]
+            gt = [_ for cId in p.catIds for _ in self._gts[img_group_Id,cId]]
+            dt = [_ for cId in p.catIds for _ in self._dts[img_group_Id,cId]]
         if len(gt) == 0 and len(dt) ==0:
             return []
         inds = np.argsort([-d['score'] for d in dt], kind='mergesort')
@@ -185,15 +185,15 @@ class NLOSeval:
             raise Exception('unknown iouType for iou computation')
 
         # compute iou between each dt and gt region
-        iscrowd = [int(o['iscrowd']) for o in gt]
+        iscrowd = [int(0) for o in gt]
         ious = maskUtils.iou(d,g,iscrowd)
         return ious
 
-    def computeOks(self, imgId, catId):
+    def computeOks(self, img_group_Id, catId):
         p = self.params
         # dimention here should be Nxm
-        gts = self._gts[imgId, catId]
-        dts = self._dts[imgId, catId]
+        gts = self._gts[img_group_Id, catId]
+        dts = self._dts[img_group_Id, catId]
         inds = np.argsort([-d['score'] for d in dts], kind='mergesort')
         dts = [dts[i] for i in inds]
         if len(dts) > p.maxDets[-1]:
@@ -232,18 +232,18 @@ class NLOSeval:
                 ious[i, j] = np.sum(np.exp(-e)) / e.shape[0]
         return ious
 
-    def evaluateImg(self, imgId, catId, aRng, maxDet):
+    def evaluateImg(self, img_group_Id, catId, aRng, maxDet):
         '''
         perform evaluation for single category and image
         :return: dict (single image results)
         '''
         p = self.params
         if p.useCats:
-            gt = self._gts[imgId,catId]
-            dt = self._dts[imgId,catId]
+            gt = self._gts[img_group_Id,catId]
+            dt = self._dts[img_group_Id,catId]
         else:
-            gt = [_ for cId in p.catIds for _ in self._gts[imgId,cId]]
-            dt = [_ for cId in p.catIds for _ in self._dts[imgId,cId]]
+            gt = [_ for cId in p.catIds for _ in self._gts[img_group_Id,cId]]
+            dt = [_ for cId in p.catIds for _ in self._dts[img_group_Id,cId]]
         if len(gt) == 0 and len(dt) ==0:
             return None
 
@@ -258,9 +258,9 @@ class NLOSeval:
         gt = [gt[i] for i in gtind]
         dtind = np.argsort([-d['score'] for d in dt], kind='mergesort')
         dt = [dt[i] for i in dtind[0:maxDet]]
-        iscrowd = [int(o['iscrowd']) for o in gt]
+        iscrowd = [int(0) for o in gt]
         # load computed ious
-        ious = self.ious[imgId, catId][:, gtind] if len(self.ious[imgId, catId]) > 0 else self.ious[imgId, catId]
+        ious = self.ious[img_group_Id, catId][:, gtind] if len(self.ious[img_group_Id, catId]) > 0 else self.ious[img_group_Id, catId]
 
         T = len(p.iouThrs)
         G = len(gt)
@@ -299,7 +299,7 @@ class NLOSeval:
         dtIg = np.logical_or(dtIg, np.logical_and(dtm==0, np.repeat(a,T,0)))
         # store results for given image and category
         return {
-                'image_id':     imgId,
+                'image_group_id':     img_group_Id,
                 'category_id':  catId,
                 'aRng':         aRng,
                 'maxDet':       maxDet,
@@ -341,13 +341,13 @@ class NLOSeval:
         setK = set(catIds)
         setA = set(map(tuple, _pe.areaRng))
         setM = set(_pe.maxDets)
-        setI = set(_pe.imgIds)
+        setI = set(_pe.img_groupIds)
         # get inds to evaluate
         k_list = [n for n, k in enumerate(p.catIds)  if k in setK]
         m_list = [m for n, m in enumerate(p.maxDets) if m in setM]
         a_list = [n for n, a in enumerate(map(lambda x: tuple(x), p.areaRng)) if a in setA]
-        i_list = [n for n, i in enumerate(p.imgIds)  if i in setI]
-        I0 = len(_pe.imgIds)
+        i_list = [n for n, i in enumerate(p.img_groupIds)  if i in setI]
+        I0 = len(_pe.img_groupIds)
         A0 = len(_pe.areaRng)
         # retrieve E at each category, area range, and max number of detections
         for k, k0 in enumerate(k_list):
@@ -424,7 +424,7 @@ class NLOSeval:
         Compute and display summary metrics for evaluation results.
         Note this functin can *only* be applied on the default parameter setting
         '''
-        def _summarize( ap=1, iouThr=None, areaRng='all', maxDets=100 ):
+        def _summarize( ap=1, iouThr=None, areaRng='all', maxDets=10 ):
             p = self.params
             iStr = ' {:<18} {} @[ IoU={:<9} | area={:>6s} | maxDets={:>3d} ] = {:0.3f}'
             titleStr = 'Average Precision' if ap == 1 else 'Average Recall'
@@ -463,9 +463,14 @@ class NLOSeval:
             stats[3] = _summarize(1, areaRng='small', maxDets=self.params.maxDets[2])
             stats[4] = _summarize(1, areaRng='medium', maxDets=self.params.maxDets[2])
             stats[5] = _summarize(1, areaRng='large', maxDets=self.params.maxDets[2])
-            stats[6] = _summarize(0, maxDets=self.params.maxDets[0])
-            stats[7] = _summarize(0, maxDets=self.params.maxDets[1])
-            stats[8] = _summarize(0, maxDets=self.params.maxDets[2])
+            #stats[6] = _summarize(0, maxDets=self.params.maxDets[0])
+            #stats[7] = _summarize(0, maxDets=self.params.maxDets[1])
+            #stats[8] = _summarize(0, maxDets=self.params.maxDets[2])
+
+            stats[6] = _summarize(1, maxDets=self.params.maxDets[1])
+            stats[7] = _summarize(1, iouThr=.5, maxDets=self.params.maxDets[1])
+            stats[8] = _summarize(1, iouThr=.75, maxDets=self.params.maxDets[1])
+
             stats[9] = _summarize(0, areaRng='small', maxDets=self.params.maxDets[2])
             stats[10] = _summarize(0, areaRng='medium', maxDets=self.params.maxDets[2])
             stats[11] = _summarize(0, areaRng='large', maxDets=self.params.maxDets[2])
@@ -500,18 +505,18 @@ class Params:
     Params for nlos evaluation api
     '''
     def setDetParams(self):
-        self.imgIds = []
+        self.img_groupIds = []
         self.catIds = []
         # np.arange causes trouble.  the data point on arange is slightly larger than the true value
         self.iouThrs = np.linspace(.5, 0.95, int(np.round((0.95 - .5) / .05)) + 1, endpoint=True)
         self.recThrs = np.linspace(.0, 1.00, int(np.round((1.00 - .0) / .01)) + 1, endpoint=True)
-        self.maxDets = [1, 10, 100]
+        self.maxDets = [1, 5, 10]
         self.areaRng = [[0 ** 2, 1e5 ** 2], [0 ** 2, 32 ** 2], [32 ** 2, 96 ** 2], [96 ** 2, 1e5 ** 2]]
         self.areaRngLbl = ['all', 'small', 'medium', 'large']
         self.useCats = 1
 
     def setKpParams(self):
-        self.imgIds = []
+        self.img_groupIds = []
         self.catIds = []
         # np.arange causes trouble.  the data point on arange is slightly larger than the true value
         self.iouThrs = np.linspace(.5, 0.95, int(np.round((0.95 - .5) / .05)) + 1, endpoint=True)
