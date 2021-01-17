@@ -223,14 +223,18 @@ class COCOeval:
         ious = self.ious[(imgId, catId)]
         if len(ious):
             iou_diff = (ious - d_iou_pred) ** 2
+
+            max_per_gt = ious.argmax(axis=0)
+            iou_diff_per_gt = np.concatenate((iou_diff[max_per_gt, np.arange(len(max_per_gt))].reshape(-1,1),
+                ious[max_per_gt, np.arange(len(max_per_gt))].reshape(-1,1)), axis=1)
+
             target_iou = ious[np.arange(len(ious)),iou_diff.argmin(axis=1)].reshape(-1,1)
             iou_diff = np.sqrt(iou_diff.min(axis=1).reshape(-1,1))
             iou_diff = np.concatenate((iou_diff, target_iou), axis=1) 
-
-
         else:
             iou_diff = np.array([])
-        return iou_diff
+            iou_diff_per_gt = np.array([])
+        return (iou_diff, iou_diff_per_gt)
 
     def computeOks(self, imgId, catId):
         p = self.params
