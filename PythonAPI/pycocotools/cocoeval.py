@@ -143,9 +143,14 @@ class COCOeval:
 
         if p.iouType == 'segm' or p.iouType == 'bbox':
             computeIoU = self.computeIoU
+            computeIoUDiff = self.computeIoUDiff
         elif p.iouType == 'keypoints':
             computeIoU = self.computeOks
+            computeIoUDiff = self.computeIoUDiff
         self.ious = {(imgId, catId): computeIoU(imgId, catId) \
+                        for imgId in p.imgIds
+                        for catId in catIds}
+        self.iou_diff = {(imgId, catId): computeIoUDiff(imgId, catId) \
                         for imgId in p.imgIds
                         for catId in catIds}
 
@@ -187,7 +192,45 @@ class COCOeval:
         # compute iou between each dt and gt region
         iscrowd = [int(o['iscrowd']) for o in gt]
         ious = maskUtils.iou(d,g,iscrowd)
+
+        if len(ious) > 0:
+            assert ((ious <= 1.0) * (ious >= 0.0)).all()
         return ious
+
+    def computeIoUDiff(self, imgId, catId):
+        p = self.params
+        if p.useCats:
+            gt = self._gts[imgId,catId]
+            dt = self._dts[imgId,catId]
+        else:
+            gt = [_ for cId in p.catIds for _ in self._gts[imgId,cId]]
+            dt = [_ for cId in p.catIds for _ in self._dts[imgId,cId]]
+        if len(gt) == 0 and len(dt) ==0:
+            return []
+        inds = np.argsort([-d['score'] for d in dt], kind='mergesort')
+        dt = [dt[i] for i in inds]
+        if len(dt) > p.maxDets[-1]:
+            dt=dt[0:p.maxDets[-1]]
+
+        if p.iouType == 'segm':
+            g = [g['segmentation'] for g in gt]
+            d = [d['segmentation'] for d in dt]
+        elif p.iouType == 'bbox':
+            d_iou_pred = np.array([d['iou_pred']for d in dt]).reshape(-1,1)
+        else:
+            raise Exception('unknown iouType for iou computation')
+
+        ious = self.ious[(imgId, catId)]
+        if len(ious):
+            iou_diff = (ious - d_iou_pred) ** 2
+            target_iou = ious[np.arange(len(ious)),iou_diff.argmin(axis=1)].reshape(-1,1)
+            iou_diff = np.sqrt(iou_diff.min(axis=1).reshape(-1,1))
+            iou_diff = np.concatenate((iou_diff, target_iou), axis=1) 
+
+
+        else:
+            iou_diff = np.array([])
+        return iou_diff
 
     def computeOks(self, imgId, catId):
         p = self.params
@@ -456,19 +499,22 @@ class COCOeval:
             print(iStr.format(titleStr, typeStr, iouStr, areaRng, maxDets, mean_s))
             return mean_s
         def _summarizeDets():
-            stats = np.zeros((12,))
+            stats = np.zeros((15,))
             stats[0] = _summarize(1)
             stats[1] = _summarize(1, iouThr=.5, maxDets=self.params.maxDets[2])
-            stats[2] = _summarize(1, iouThr=.75, maxDets=self.params.maxDets[2])
-            stats[3] = _summarize(1, areaRng='small', maxDets=self.params.maxDets[2])
-            stats[4] = _summarize(1, areaRng='medium', maxDets=self.params.maxDets[2])
-            stats[5] = _summarize(1, areaRng='large', maxDets=self.params.maxDets[2])
-            stats[6] = _summarize(0, maxDets=self.params.maxDets[0])
-            stats[7] = _summarize(0, maxDets=self.params.maxDets[1])
-            stats[8] = _summarize(0, maxDets=self.params.maxDets[2])
-            stats[9] = _summarize(0, areaRng='small', maxDets=self.params.maxDets[2])
-            stats[10] = _summarize(0, areaRng='medium', maxDets=self.params.maxDets[2])
-            stats[11] = _summarize(0, areaRng='large', maxDets=self.params.maxDets[2])
+            stats[2] = _summarize(1, iouThr=.6, maxDets=self.params.maxDets[2])
+            stats[3] = _summarize(1, iouThr=.7, maxDets=self.params.maxDets[2])
+            stats[4] = _summarize(1, iouThr=.8, maxDets=self.params.maxDets[2])
+            stats[5] = _summarize(1, iouThr=.9, maxDets=self.params.maxDets[2])
+            stats[6] = _summarize(1, areaRng='small', maxDets=self.params.maxDets[2])
+            stats[7] = _summarize(1, areaRng='medium', maxDets=self.params.maxDets[2])
+            stats[8] = _summarize(1, areaRng='large', maxDets=self.params.maxDets[2])
+            stats[9] = _summarize(0, maxDets=self.params.maxDets[0])
+            stats[10] = _summarize(0, maxDets=self.params.maxDets[1])
+            stats[11] = _summarize(0, maxDets=self.params.maxDets[2])
+            stats[12] = _summarize(0, areaRng='small', maxDets=self.params.maxDets[2])
+            stats[13] = _summarize(0, areaRng='medium', maxDets=self.params.maxDets[2])
+            stats[14] = _summarize(0, areaRng='large', maxDets=self.params.maxDets[2])
             return stats
         def _summarizeKps():
             stats = np.zeros((10,))
